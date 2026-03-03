@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Management Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .product-img {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+
+        /* Ẩn cột description mặc định */
+        .desc-wrapper {
+            position: relative;
+            color: #6c757d;
+            cursor: pointer;
+            font-style: italic;
+        }
+
+        /* Tooltip hiển thị description */
+        .desc-content {
+            display: none; /* Mặc định ẩn */
+            position: absolute;
+            background: #212529;
+            color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            width: 300px;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            font-style: normal;
+            font-size: 0.9rem;
+            white-space: normal;
+        }
+
+        /* Hiển thị description khi di chuột vào đúng dòng (tr) */
+        tr:hover .desc-content {
+            display: block;
+        }
+
+        /* Mũi tên cho tooltip */
+        .desc-content::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #212529 transparent transparent transparent;
+        }
+
+        .sort-header {
+            cursor: pointer;
+            user-select: none;
+        }
+        .sort-header:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container py-5">
+    <div class="card shadow border-0">
+        <div class="card-header bg-white py-3 border-0">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <h3 class="text-primary fw-bold mb-0">Dashboard</h3>
+                </div>
+                <div class="col-md-5">
+                    <input type="text" id="searchInput" class="form-control" 
+                           placeholder="Tìm kiếm theo tiêu đề..." oninput="handleSearch()">
+                </div>
+                <div class="col-md-3">
+                    <select id="limitSelect" class="form-select" onchange="handleLimitChange()">
+                        <option value="5">Hiển thị 5</option>
+                        <option value="10" selected>Hiển thị 10</option>
+                        <option value="20">Hiển thị 20</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light text-uppercase small fw-bold">
+                        <tr>
+                            <th class="ps-4">ID</th>
+                            <th>Ảnh</th>
+                            <th class="sort-header" onclick="handleSort('title')">Sản phẩm ↕</th>
+                            <th class="sort-header" onclick="handleSort('price')">Giá ($) ↕</th>
+                            <th>Mô tả</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productTableBody">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card-footer bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+            <div id="paginationInfo" class="text-muted small"></div>
+            <nav>
+                <ul id="paginationNav" class="pagination pagination-sm mb-0">
+                    </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<script>
+    let allProducts = [];
+    let filteredProducts = [];
+    let currentPage = 1;
+    let itemsPerPage = 10;
+    let sortConfig = { key: '', direction: 'asc' };
+
+    // 1. Kéo data về từ API
+    async function fetchData() {
+        try {
+            const response = await fetch('https://api.escuelajs.co/api/v1/products');
+            allProducts = await response.json();
+            filteredProducts = [...allProducts];
+            renderDashboard();
+        } catch (error) {
+            console.error("Lỗi khi kéo dữ liệu:", error);
+        }
+    }
+
+    // 2. Hàm render chính
+    function renderDashboard() {
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const pageData = filteredProducts.slice(start, end);
+
+        const tbody = document.getElementById('productTableBody');
+        tbody.innerHTML = pageData.map(p => {
+            // Làm sạch link ảnh
+            const imgUrl = p.images[0].replace(/[\[\]"]/g, "");
+            
+            return `
+                <tr>
+                    <td class="ps-4 text-muted">#${p.id}</td>
+                    <td>
+                        <img src="${imgUrl}" referrerpolicy="no-referrer" class="product-img" onerror="this.src='https://placehold.co/50x50?text=Error'">
+                    </td>
+                    <td class="fw-bold">${p.title}</td>
+                    <td class="text-success fw-bold">$${p.price}</td>
+                    <td>
+                        <div class="desc-wrapper">
+                            Rê chuột để xem...
+                            <div class="desc-content">${p.description}</div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        renderPaginationControls();
+    }
+
+    // 3. Chức năng tìm kiếm (onChange/oninput)
+    function handleSearch() {
+        const query = document.getElementById('searchInput').value.toLowerCase();
+        filteredProducts = allProducts.filter(p => 
+            p.title.toLowerCase().includes(query)
+        );
+        currentPage = 1; // Reset về trang 1 khi tìm kiếm
+        renderDashboard();
+    }
+
+    // 4. Chức năng Sort Title và Price
+    function handleSort(key) {
+        if (sortConfig.key === key) {
+            sortConfig.direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortConfig.key = key;
+            sortConfig.direction = 'asc';
+        }
+
+        filteredProducts.sort((a, b) => {
+            let valA = a[key];
+            let valB = b[key];
+            
+            if (typeof valA === 'string') {
+                return sortConfig.direction === 'asc' 
+                    ? valA.localeCompare(valB) 
+                    : valB.localeCompare(valA);
+            }
+            return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+        });
+
+        renderDashboard();
+    }
+
+    // 5. Chức năng Limit trang
+    function handleLimitChange() {
+        itemsPerPage = parseInt(document.getElementById('limitSelect').value);
+        currentPage = 1;
+        renderDashboard();
+    }
+
+    // 6. Xử lý phân trang
+    function renderPaginationControls() {
+        const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+        const nav = document.getElementById('paginationNav');
+        const info = document.getElementById('paginationInfo');
+
+        info.innerText = `Hiển thị ${itemsPerPage} trên tổng số ${filteredProducts.length} sản phẩm`;
+
+        let html = '';
+        for (let i = 1; i <= totalPages; i++) {
+            // Giới hạn số nút hiển thị nếu quá nhiều trang
+            if (i <= 5 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                html += `
+                    <li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+                    </li>
+                `;
+            }
+        }
+        nav.innerHTML = html;
+    }
+
+    function changePage(page) {
+        currentPage = page;
+        renderDashboard();
+    }
+
+    // Khởi chạy
+    fetchData();
+</script>
+
+</body>
+</html>
